@@ -11,7 +11,14 @@
 
 import { nativeImage, shell } from "electron/common";
 import type { WebContents } from "electron/main";
-import { BrowserWindow, Menu, Tray, app, protocol } from "electron/main";
+import {
+    BrowserWindow,
+    Menu,
+    Tray,
+    app,
+    protocol,
+    safeStorage,
+} from "electron/main";
 import serveNextAt from "next-electron-server";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
@@ -26,6 +33,7 @@ import log, { initLogging } from "./main/log";
 import { createApplicationMenu, createTrayContextMenu } from "./main/menu";
 import { setupAutoUpdater } from "./main/services/app-update";
 import autoLauncher from "./main/services/auto-launcher";
+import { encryptionKey } from "./main/services/store";
 import { createWatcher } from "./main/services/watch";
 import { userPreferences } from "./main/stores/user-preferences";
 import { migrateLegacyWatchStoreIfNeeded } from "./main/stores/watch";
@@ -384,13 +392,24 @@ const main = () => {
         }
     });
 
+    log2("main");
     // Emitted once, when Electron has finished initializing.
     //
     // Note that some Electron APIs can only be used after this event occurs.
     void app.whenReady().then(() => {
+        log2("whenReady");
+
         void (async () => {
             // Create window and prepare for the renderer.
             mainWindow = createMainWindow();
+
+            log2("didCreateMainWindow");
+            log2(
+                JSON.stringify({
+                    isEncryptionAvailable: safeStorage.isEncryptionAvailable(),
+                    encryptionKey: encryptionKey(),
+                }),
+            );
 
             // Setup IPC and streams.
             const watcher = createWatcher(mainWindow);
@@ -429,6 +448,20 @@ const main = () => {
     app.on("activate", () => mainWindow?.show());
 
     app.on("before-quit", allowWindowClose);
+};
+
+const log2 = (message: string) => {
+    log.error(message);
+    const m = [
+        new Date().toString() + ":",
+        message,
+        process.platform == "win32" ? "\r\n" : "\n",
+    ];
+    void fs.appendFile(
+        process.platform == "win32" ? "C:\\ente.test.log" : "ente.test.log",
+        m.join(" "),
+        { encoding: "utf-8" },
+    );
 };
 
 main();
